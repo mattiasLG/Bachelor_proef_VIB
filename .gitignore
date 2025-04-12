@@ -1,3 +1,4 @@
 Testdata_MACSima/
 pixel_classifier_**/
 image_classifier_**/
+**.keras

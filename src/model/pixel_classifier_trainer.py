@@ -12,14 +12,15 @@ from tensorflow.keras.models import Model
 CWD = os.getcwd()
 FILE_PATH = os.path.dirname(os.path.realpath(__file__))
 IMAGE_SIZE = 512
-MODEL_NAME = f"pixel_classifier_{IMAGE_SIZE}"
+MODEL_NAME = os.path.join(FILE_PATH, f"pixel_classifier_{IMAGE_SIZE}.keras")
 TO_SAVE = True
-BATCH_SIZE = 50
-EPOCHS = 5
+BATCH_SIZE = 8
+EPOCHS = 10
 
 logger = logging.getLogger("Pixel Classifier")
 
 def main(args):
+    print("running")
     for arg in args:
         path = os.path.join(CWD, arg)
         if os.path.isdir(path) and arg.endswith(".zarr"):
@@ -32,9 +33,10 @@ def main(args):
 def workflow(sdata:SpatialData):
     keys = list(sdata.images.keys())
 
-    for i in keys[:1]:
-        data = image_splitter(sdata[i].data.squeeze())
-        labels = image_splitter(sdata['labels'].data.squeeze())
+    labels = extract_patches(sdata['labels'].data.squeeze()) // 255
+
+    for i in keys:
+        data = extract_patches(sdata[i].data.squeeze()) / 255
 
         if os.path.isdir(os.path.join(FILE_PATH, MODEL_NAME)):
             model = keras.models.load_model("saved_model_directory")
@@ -87,26 +89,16 @@ def unet_model_smaller(input_size=(IMAGE_SIZE, IMAGE_SIZE, 1)):
     model = Model(inputs, outputs)
     return model
 
-def image_stitcher(data:np.ndarray, shape, image_slice_size=IMAGE_SIZE):
-    x = shape[0]//image_slice_size
-    y = shape[1]//image_slice_size
+def extract_patches(array:np.ndarray, patch_size=512, stride=64):
+    patches = []
+    h, w = array.shape
 
-    vert = []
-    print(x, y)
+    for i in range(0, h - patch_size, stride):
+        for j in range(0, w - patch_size, stride):
+            img_patch = array[i:i+patch_size, j:j+patch_size]
 
-    for i in range(x):
-        print(data[i*y:i*y+y])
-        vert.append(np.concatenate(data[i*y:i*y+y], axis=1))
+            patches.append(img_patch)
 
-    return np.concatenate(vert, axis=0)
-
-def image_splitter(array:np.ndarray, image_slice_size=IMAGE_SIZE):
-    shape = array.shape
-    images = []
-    for i in range(shape[0]//image_slice_size):
-        for j in range(shape[1]//image_slice_size):
-            images.append(array[i*image_slice_size:i*image_slice_size+image_slice_size, j*image_slice_size:j*image_slice_size+image_slice_size])
-
-    return np.array(images)
+    return np.array(patches)
 
 main(sys.argv[1:])
