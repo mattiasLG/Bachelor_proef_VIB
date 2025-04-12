@@ -14,8 +14,8 @@ FILE_PATH = os.path.dirname(os.path.realpath(__file__))
 IMAGE_SIZE = 512
 MODEL_NAME = os.path.join(FILE_PATH, f"pixel_classifier_{IMAGE_SIZE}.keras")
 TO_SAVE = True
-BATCH_SIZE = 8
-EPOCHS = 10
+BATCH_SIZE = 4
+EPOCHS = 5
 
 logger = logging.getLogger("Pixel Classifier")
 
@@ -32,11 +32,9 @@ def main(args):
 
 def workflow(sdata:SpatialData):
     keys = list(sdata.images.keys())
-
-    labels = extract_patches(sdata['labels'].data.squeeze()) // 255
-
-    for i in keys:
-        data = extract_patches(sdata[i].data.squeeze()) / 255
+    labels = image_splitter(sdata['labels'].data.squeeze())
+    for i in keys[:1]:
+        data = image_splitter(sdata[i].data.squeeze())
 
         if os.path.isdir(os.path.join(FILE_PATH, MODEL_NAME)):
             model = keras.models.load_model("saved_model_directory")
