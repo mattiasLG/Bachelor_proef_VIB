@@ -1,41 +1,74 @@
 from dask_image.imread import imread
 import os
+import random
 
 from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Labels2DModel
 
-DIRECTORY = r"C:\Users\matti\Documents\HOGENT\Jaar-3\bachproef\Bachelor_proef_VIB\Testdata_MACSima\Testdata_CE\R01\B01\ROI1"
-ANNOTATION = r"C:\Users\matti\Documents\HOGENT\Jaar-3\bachproef\Bachelor_proef_VIB\Testdata_MACSima\Testdata_CE\dummy_acquisition_bleaching.tif"
-OUTPUT = r"C:\Users\matti\Documents\HOGENT\Jaar-3\bachproef\Bachelor_proef_VIB\Testdata_MACSima\Testdata_CE.zarr"
+CWD = os.getcwd()
+directory = r"D:\PPP_M17_SPC-035-full2\2024_09_20_M17_SPC-035_HelenaAegerter\R01\A01\ROI3"
+name = "_".join(directory.split("\\")[-4:])
+train_output = fr"D:\train\{name}.zarr"
+test_output = fr"D:\test\{name}.zarr"
+annotations_name = "annotations.tif"
+train_test_split = .7
 
 def main():
+    print("STARTING CONVERTER")
     images = []
 
-    for file in os.listdir(DIRECTORY):
-        array = imread(os.path.join(DIRECTORY,file))
-        images.append(array)
+    for i in os.listdir(directory):
+        if not i.startswith("C-000") and "DAPI" not in i and i.endswith(".tif") and i!=annotations_name:
+            images.append(i)
 
-    mask = imread(ANNOTATION)
+    mask = imread(os.path.join(directory, annotations_name))
 
-    mask
+    random.shuffle(images)
+    index = int(len(images)*train_test_split)
 
-    sdata = SpatialData()
+    train_list = images[:index]
+    test_list = images[index:]
 
-    for i in range(len(images)):
+    train_sdata = SpatialData()
+    test_sdata = SpatialData()
+
+
+    print("PREPING DATA")
+    for i in train_list:
         print(i)
-        sdata[f"channel_{i}"] = Image2DModel.parse(
-        images[i],
-    )
+        array = imread(os.path.join(directory,i))
+        train_sdata[check_name(i)] = Image2DModel.parse(
+        array,
+        )
 
-    print(mask)
-    sdata['labels'] = Labels2DModel.parse(
+    for i in test_list:
+        array = imread(os.path.join(directory,i))
+        test_sdata[check_name(i)] = Image2DModel.parse(
+        array,
+        )
+
+    train_sdata['annotations'] = Labels2DModel.parse(
         mask.squeeze(),
     )
-    sdata
-
-    sdata.write(
-        OUTPUT,
-        overwrite=True,
+    
+    test_sdata['annitations'] = Labels2DModel.parse(
+        mask.squeeze(),
     )
+
+    print("SAVING DATA")
+    train_sdata.write(
+        train_output,
+    )
+
+    test_sdata.write(
+        test_output,
+    )
+
+def check_name(string):
+    checks = ["(", ")"]
+    for c in checks:
+        string = "_".join(string.split(c))
+    
+    return string
 
 main()

@@ -1,11 +1,12 @@
 from osgeo import gdal, ogr
 import os
+import argparse
 
 DIR_PATH = os.path.dirname(__file__)
 
-geojson_path = os.path.join(DIR_PATH,"../../Testdata_MACSima/Testdata_CE/dummy_acquisition_bleaching.geojson")  
-reference_tiff = os.path.join(DIR_PATH,"../../Testdata_MACSima/Testdata_CE/R01/B01/ROI1/C-000_S-002_S_APC_R-01_W-B01_ROI-01_A-APC.tif")
-output_tiff = os.path.join(DIR_PATH,"../../Testdata_MACSima/Testdata_CE/dummy_acquisition_bleaching.tif")
+geojson_path = r"D:\PPP_M17_SPC-035-full2\2024_09_20_M17_SPC-035_HelenaAegerter\R01\A01\ROI3\annotations.geojson"
+reference_tiff = r"D:\PPP_M17_SPC-035-full2\2024_09_20_M17_SPC-035_HelenaAegerter\R01\A01\ROI3\C-001_S-000_B_APC_R-01_W-A01_ROI-03_A-CD45R_C-REAL132.tif"
+output_tiff = geojson_path.split(".")[0]+".tif"
 
 src_ds = gdal.Open(reference_tiff)
 geo_transform = src_ds.GetGeoTransform()
