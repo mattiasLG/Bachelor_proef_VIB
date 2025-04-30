@@ -2,3 +2,4 @@ Testdata_MACSima/
 pixel_classifier_**/
 **.keras
 **.log
+**.txt

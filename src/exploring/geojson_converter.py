@@ -4,8 +4,8 @@ import argparse
 
 DIR_PATH = os.path.dirname(__file__)
 
-geojson_path = r"D:\PPP_M17_SPC-035-full2\2024_09_20_M17_SPC-035_HelenaAegerter\R01\A01\ROI3\annotations.geojson"
-reference_tiff = r"D:\PPP_M17_SPC-035-full2\2024_09_20_M17_SPC-035_HelenaAegerter\R01\A01\ROI3\C-001_S-000_B_APC_R-01_W-A01_ROI-03_A-CD45R_C-REAL132.tif"
+geojson_path = r"D:\2024_03_15_CelineEveraert_3_240414_071301_preprocessed\2024_03_15_CelineEveraert_3\R01\B01\ROI1\annotations.geojson"
+reference_tiff = r"D:\2024_03_15_CelineEveraert_3_240414_071301_preprocessed\2024_03_15_CelineEveraert_3\R01\B01\ROI1\C-001_S-000_B_FITC_R-01_W-B01_ROI-01_A-Bcl_2_C-REA872.tif"
 output_tiff = geojson_path.split(".")[0]+".tif"
 
 src_ds = gdal.Open(reference_tiff)

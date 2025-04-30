@@ -6,63 +6,68 @@ from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Labels2DModel
 
 CWD = os.getcwd()
-directory = r"D:\PPP_M17_SPC-035-full2\2024_09_20_M17_SPC-035_HelenaAegerter\R01\A01\ROI3"
-name = "_".join(directory.split("\\")[-4:])
-train_output = fr"D:\train\{name}.zarr"
-test_output = fr"D:\test\{name}.zarr"
+file = r"C:\Users\Mattias\Documents\projects\HOGENT\Bach_proef\Bachelor_proef_VIB\src\model\files.txt"
 annotations_name = "annotations.tif"
-train_test_split = .7
+train_test_split = .8
+overwrite = True
 
 def main():
     print("STARTING CONVERTER")
-    images = []
+    directories = open(file, "r")
 
-    for i in os.listdir(directory):
-        if not i.startswith("C-000") and "DAPI" not in i and i.endswith(".tif") and i!=annotations_name:
-            images.append(i)
+    for dir in directories.read().split("\n"):
+        images = []
+        for i in os.listdir(dir):
+            if not i.startswith("C-000") and "DAPI" not in i and i.endswith(".tif") and i!=annotations_name:
+                images.append(i)
 
-    mask = imread(os.path.join(directory, annotations_name))
+        mask = imread(os.path.join(dir, annotations_name))
 
-    random.shuffle(images)
-    index = int(len(images)*train_test_split)
+        random.shuffle(images)
+        index = int(len(images)*train_test_split)
 
-    train_list = images[:index]
-    test_list = images[index:]
+        train_list = images[:index]
+        test_list = images[index:]
 
-    train_sdata = SpatialData()
-    test_sdata = SpatialData()
+        train_sdata = SpatialData()
+        test_sdata = SpatialData()
 
+        print("PREPING DATA")
+        for i in train_list:
+            array = imread(os.path.join(dir,i))
+            train_sdata[check_name(i)] = Image2DModel.parse(
+            array,
+            )
 
-    print("PREPING DATA")
-    for i in train_list:
-        print(i)
-        array = imread(os.path.join(directory,i))
-        train_sdata[check_name(i)] = Image2DModel.parse(
-        array,
+        for i in test_list:
+            array = imread(os.path.join(dir,i))
+            test_sdata[check_name(i)] = Image2DModel.parse(
+            array,
+            )
+
+        train_sdata['annotations'] = Labels2DModel.parse(
+            mask.squeeze(),
+        )
+        
+        test_sdata['annotations'] = Labels2DModel.parse(
+            mask.squeeze(),
         )
 
-    for i in test_list:
-        array = imread(os.path.join(directory,i))
-        test_sdata[check_name(i)] = Image2DModel.parse(
-        array,
+        print("SAVING DATA")
+        name = "_".join(dir.split("\\")[-4:])
+        train_output = fr"D:\train\{name}.zarr"
+        test_output = fr"D:\test\{name}.zarr"
+
+        print(name)
+        train_sdata.write(
+            train_output,
+            overwrite,
         )
 
-    train_sdata['annotations'] = Labels2DModel.parse(
-        mask.squeeze(),
-    )
-    
-    test_sdata['annitations'] = Labels2DModel.parse(
-        mask.squeeze(),
-    )
-
-    print("SAVING DATA")
-    train_sdata.write(
-        train_output,
-    )
-
-    test_sdata.write(
-        test_output,
-    )
+        test_sdata.write(
+            test_output,
+            overwrite,
+        )
 
 def check_name(string):
     checks = ["(", ")"]
