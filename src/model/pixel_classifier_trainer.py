@@ -21,7 +21,7 @@ IMAGE_SIZE = 256
 STRIDE = IMAGE_SIZE - 32
 MODEL_NAME = os.path.join(FILE_PATH, f"pixel_classifier_{IMAGE_SIZE}.keras")
 TO_SAVE = True
-BATCH_SIZE = 4
+BATCH_SIZE = 2
 EPOCHS = 10
 
 # Configs
@@ -33,7 +33,7 @@ logging.basicConfig(
         logging.FileHandler(os.path.join(FILE_PATH, "training.log"))  # File
     ]
 )
-set_global_policy('mixed_float16')
+# set_global_policy('mixed_float16')
 
 logger = logging.getLogger("Pixel Classifier")
   
@@ -44,7 +44,7 @@ def main(dir):
             logger.info("Fetching model")
             model = keras.models.load_model(
                 MODEL_NAME,
-                custom_objects={'dice_loss': dice_loss, 'dice_coef': dice_coef, 'iou': iou}
+                custom_objects={'dice_coef': dice_coef, 'iou': iou}
             )
     
     else:
@@ -83,7 +83,7 @@ def workflow(sdata:SpatialData, model):
             model.save(MODEL_NAME)
 
 def train_model(model, X, Y):
-    model.compile(optimizer='adam', loss=dice_loss, metrics=[dice_coef, iou])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=[dice_coef, iou])
 
     logger.info("TRAINING MODEL")
     print(X.shape)
@@ -165,7 +165,7 @@ def unet_model():
     c9 = Conv2D(64, (3, 3), activation='relu', padding='same')(u9)
     c9 = Conv2D(64, (3, 3), activation='relu', padding='same')(c9)
 
-    outputs = Conv2D(1, (1, 1), activation='sigmoid', dtype='float32')(c5)
+    outputs = Conv2D(1, (1, 1), activation='sigmoid', dtype='float32')(c9)
 
     model = Model(inputs, outputs)
     return model
@@ -205,7 +205,8 @@ def iou(y_true, y_pred, smooth=1):
     union = keras.backend.sum(y_true_f) + keras.backend.sum(y_pred_f) - intersection
     return (intersection + smooth) / (union + smooth)
 
-def dice_loss(y_true, y_pred):
-    return 1 - dice_coef(y_true, y_pred)
+def bce_dice_loss(y_true, y_pred):
+    bce = keras.losses.binary_crossentropy(y_true, y_pred)
+    return bce + (1 - dice_coef(y_true, y_pred))
 
 main(sys.argv[1])
