@@ -37,12 +37,14 @@ def main():
             array = imread(os.path.join(dir,i))
             train_sdata[check_name(i)] = Image2DModel.parse(
             array,
+            chunks=(512, 512)
             )
 
         for i in test_list:
             array = imread(os.path.join(dir,i))
             test_sdata[check_name(i)] = Image2DModel.parse(
             array,
+            chunks=(512, 512)
             )
 
         train_sdata['annotations'] = Labels2DModel.parse(
@@ -55,8 +57,8 @@ def main():
 
         print("SAVING DATA")
         name = "_".join(dir.split("\\")[-4:])
-        train_output = fr"D:\train\{name}.zarr"
-        test_output = fr"D:\test\{name}.zarr"
+        train_output = fr"E:\train\{name}.zarr"
+        test_output = fr"E:\test\{name}.zarr"
 
         print(name)
         train_sdata.write(
