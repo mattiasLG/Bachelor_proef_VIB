@@ -2,7 +2,6 @@ import sys
 import os
 import numpy as np
 import logging
-import keras
 import tensorflow as tf
 import gc
 from tensorflow.keras import backend as K
@@ -43,7 +42,7 @@ def main(dir):
 
     if os.path.isfile(MODEL_NAME):
             logger.info("Fetching model")
-            model = keras.models.load_model(
+            model = tf.keras.models.load_model(
                 MODEL_NAME,
                 custom_objects={'bce_dice_loss': bce_dice_loss}
             )
@@ -55,6 +54,7 @@ def main(dir):
     for arg in os.listdir(dir):
         path = os.path.join(dir, arg)
         if os.path.isdir(path) and arg.endswith(".zarr"):
+            print(path)
             sdata = read_zarr(path)
             logger.info(f"training on {path} dataset")
             workflow(sdata, model)
@@ -87,7 +87,7 @@ def workflow(sdata:SpatialData, model):
             model.save(MODEL_NAME)
 
 def train_model(model, X, Y):
-    iou = keras.metrics.IoU(num_classes=2, target_class_ids=[1])
+    iou = tf.keras.metrics.IoU(num_classes=2, target_class_ids=[1])
 
     model.compile(optimizer='adam', loss=bce_dice_loss, metrics=[iou])
 

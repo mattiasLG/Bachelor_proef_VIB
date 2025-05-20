@@ -57,8 +57,8 @@ def main():
 
         print("SAVING DATA")
         name = "_".join(dir.split("\\")[-4:])
-        train_output = fr"E:\train\{name}.zarr"
-        test_output = fr"E:\test\{name}.zarr"
+        train_output = fr"E:\data\train\{name}.zarr"
+        test_output = fr"E:\data\test\{name}.zarr"
 
         print(name)
         train_sdata.write(
@@ -76,6 +76,6 @@ def check_name(string):
     for c in checks:
         string = "_".join(string.split(c))
     
-    return string
+    return string.split(".")[0]
 
 main()
