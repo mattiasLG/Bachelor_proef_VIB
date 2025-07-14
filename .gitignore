@@ -3,3 +3,4 @@ pixel_classifier_**/
 **.keras
 **.log
 **.txt
+**.pkl

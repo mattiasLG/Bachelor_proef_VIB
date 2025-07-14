@@ -12,6 +12,9 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, Conv2DTranspose, conca
 from tensorflow.keras.models import Model
 from skimage.util import view_as_windows
 from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras.mixed_precision import set_global_policy
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+set_global_policy('mixed_float16')
 # from tensorflow.keras.losses import Dice
 
 # Global variables
@@ -21,7 +24,7 @@ IMAGE_SIZE = 256
 STRIDE = IMAGE_SIZE - 32
 MODEL_NAME = os.path.join(FILE_PATH, f"pixel_classifier_{IMAGE_SIZE}.keras")
 TO_SAVE = True
-BATCH_SIZE = 2
+BATCH_SIZE = 8
 EPOCHS = 10
 
 # Configs
@@ -33,7 +36,6 @@ logging.basicConfig(
         logging.FileHandler(os.path.join(FILE_PATH, "training.log"))  # File
     ]
 )
-# set_global_policy('mixed_float16')
 
 logger = logging.getLogger("Pixel Classifier")
   
@@ -44,7 +46,7 @@ def main(dir):
             logger.info("Fetching model")
             model = tf.keras.models.load_model(
                 MODEL_NAME,
-                custom_objects={'bce_dice_loss': bce_dice_loss}
+                custom_objects={'bce_dice_loss': bce_dice_loss, 'binary_iou': binary_iou}
             )
     
     else:
@@ -56,7 +58,7 @@ def main(dir):
         if os.path.isdir(path) and arg.endswith(".zarr"):
             print(path)
             sdata = read_zarr(path)
-            logger.info(f"training on {path} dataset")
+            logger.warning(f"training on {path} dataset")
             workflow(sdata, model)
         else:
             logger.warning(f"{path} is no zarr file. Please pass one.")
@@ -65,17 +67,24 @@ def workflow(sdata:SpatialData, model):
     logger.info("fetching data")
     keys = list(sdata.images.keys())
     # labels = extract_patches(sdata['annotations'].data)//255
-    labels = extract_patches_skimage(sdata['annotations'].values)//255
+    labels_data = sdata['annotations'].values//255
 
-    for i in keys[:1]:
+    for i in keys[:5]:
         # data = extract_patches(sdata[i].data.squeeze())/255
-        data = min_max_scaler(extract_patches_skimage(sdata[i].values.squeeze()))
-        
-        if np.any(data>=1):
-            logger.warning("Value in data is larger than 1")
 
-        X = data[..., np.newaxis].astype(np.float16)  # shape: (num_patches, 256, 256, 1)
-        Y = labels[..., np.newaxis].astype(np.float16)
+        image_data = sdata[i].values.squeeze()
+        image_data = min_max_scaler(image_data)
+    
+        data_patches = extract_patches_skimage(image_data)
+        
+        label_patches = extract_patches_skimage(labels_data)
+
+        if data_patches.shape[0] != label_patches.shape[0]:
+            logger.warning(f"Patch mismatch: X={data_patches.shape[0]}, Y={label_patches.shape[0]} — skipping")
+            continue
+
+        X = data_patches[..., np.newaxis].astype(np.float16)  # shape: (num_patches, 256, 256, 1)
+        Y = label_patches[..., np.newaxis].astype(np.float16)
   
         train_model(model, X, Y)
 
@@ -87,14 +96,16 @@ def workflow(sdata:SpatialData, model):
             model.save(MODEL_NAME)
 
 def train_model(model, X, Y):
-    iou = tf.keras.metrics.IoU(num_classes=2, target_class_ids=[1])
 
-    model.compile(optimizer='adam', loss=bce_dice_loss, metrics=[iou])
+    callbacks = [
+    EarlyStopping(patience=3, restore_best_weights=True),
+    ModelCheckpoint(MODEL_NAME, save_best_only=True)
+]
+
+    model.compile(optimizer='adam', loss=bce_dice_loss, metrics=[binary_iou])
 
     logger.info("TRAINING MODEL")
-    print(X.shape)
-    print(Y.shape)
-    model.fit(X, Y, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_split=0.2)
+    model.fit(X, Y, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_split=0.2, callbacks=callbacks)
     
 
 def unet_model_smaller():
@@ -124,7 +135,7 @@ def unet_model_smaller():
     c5 = Conv2D(32, (3, 3), activation='relu', padding='same')(u5)
     c5 = Conv2D(32, (3, 3), activation='relu', padding='same')(c5)
 
-    outputs = Conv2D(1, (1, 1), activation='sigmoid')(c5)
+    outputs = Conv2D(1, (1, 1), activation='sigmoid', dtype='float32')(c5)
 
     model = Model(inputs, outputs)
     return model
@@ -181,18 +192,6 @@ def min_max_scaler(X):
     max = np.max(X)
     return (X-min)/(max-min)
 
-def extract_patches(array:np.ndarray):
-    patches = []
-    h, w = array.shape
-
-    # Ensure that the image dimensions are divisible by the patch size and stride
-    for i in range(0, h - IMAGE_SIZE + 1, STRIDE):
-        for j in range(0, w - IMAGE_SIZE + 1, STRIDE):
-            img_patch = array[i:i+IMAGE_SIZE, j:j+IMAGE_SIZE]
-            patches.append(img_patch)
-
-    return np.array(patches)
-
 def extract_patches_skimage(array: np.ndarray):
     h, w = array.shape
     pad_h = (IMAGE_SIZE - h % IMAGE_SIZE) % IMAGE_SIZE
@@ -201,20 +200,31 @@ def extract_patches_skimage(array: np.ndarray):
     array = np.pad(array, ((pad_h//2, (pad_h-pad_h//2)), (pad_w//2, (pad_w-pad_w//2))), mode='constant')
 
     window_shape = (IMAGE_SIZE, IMAGE_SIZE)
-    patches = view_as_windows(array, window_shape, step=IMAGE_SIZE)
+    patches = view_as_windows(array, window_shape, step=STRIDE)
     patches = patches.reshape(-1, IMAGE_SIZE, IMAGE_SIZE)
     
     return patches
 
 def dice_loss(y_true, y_pred, smooth=1e-6):
-    y_true_f = tf.reshape(y_true, [-1])
-    y_pred_f = tf.reshape(y_pred, [-1])
-    intersection = tf.reduce_sum(y_true_f * y_pred_f)
-    return 1 - (2. * intersection + smooth) / (tf.reduce_sum(y_true_f) + tf.reduce_sum(y_pred_f) + smooth)
+    y_true = tf.cast(y_true, tf.float32)
+    y_pred = tf.cast(y_pred, tf.float32)
+    intersection = tf.reduce_sum(y_true * y_pred, axis=[1, 2, 3])
+    union = tf.reduce_sum(y_true, axis=[1, 2, 3]) + tf.reduce_sum(y_pred, axis=[1, 2, 3])
+    dice = (2. * intersection + smooth) / (union + smooth)
+    return 1 - tf.reduce_mean(dice)
 
 def bce_dice_loss(y_true, y_pred):
+    y_true = tf.cast(y_true, tf.float32)
+    y_pred = tf.cast(y_pred, tf.float32)
     bce = binary_crossentropy(y_true, y_pred)
     dice = dice_loss(y_true, y_pred)
     return bce + dice
+
+def binary_iou(y_true, y_pred):
+    y_pred = tf.cast(y_pred > 0.5, tf.float32)
+    y_true = tf.cast(y_true, tf.float32)
+    intersection = tf.reduce_sum(y_true * y_pred)
+    union = tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) - intersection
+    return (intersection + 1e-6) / (union + 1e-6)
 
 main(sys.argv[1])
